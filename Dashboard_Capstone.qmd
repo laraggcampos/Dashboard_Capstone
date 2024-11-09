@@ -1,0 +1,698 @@
+---
+title: "Mortalidade por Insuficiência Cardíaca"
+format: 
+  dashboard:
+    sidebar-layout: 1-3
+    embed-resources: true
+execute: 
+  self-contained: true
+interactive: true
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r}
+#| label: load-packages
+#| message: false
+#| warning: false
+#| echo: false
+
+
+# Forma alternativa de instalar vários pacotes e carregá-los
+
+# SOURCE: https://cedricscherer.netlify.app/2019/05/17/the-evolution-of-a-ggplot-ep
+# Packages
+required_packages <- c("janitor",
+                       "tidyverse",
+                       "rio",
+                       "data.table",
+                       "ggplot2",
+                       "downloadthis",
+                       "DT",
+                       "leaflet",
+                       "scales",
+                       "plotly",
+                       "sf",
+                       "gt",
+                       "skimr",
+                       "sysfonts",
+                       "ggiraph",
+                       "echarts4r",
+                       "DataExplorer",
+                       "dplyr",
+                       "shinydashboard"
+                       )      
+
+for (pkg in required_packages) {
+  # install packages if not already present
+  if (!pkg %in% rownames(installed.packages())) {
+    install.packages(pkg)
+  }
+  
+  # load packages to this current session 
+  library(pkg, character.only = TRUE)
+}
+remove(required_packages)
+remove(pkg)
+
+# font_add_google("Open Sans")
+# showtext::showtext_auto()
+
+# theme_set(theme_minimal(base_size = 24, base_family = "Open Sans"))
+```
+
+```{r}
+base_gdh_ic_mortalidade2 <- import("data/base_gdh_ic_mortalidade.csv")
+```
+
+#  {.sidebar}
+
++---------------+-------------------------------------------+
+| Curso         | Fundamentos de Data Science em R          |
++---------------+-------------------------------------------+
+| Autores       | David                                     |
+|               |                                           |
+|               | Lara Campos                               |
++---------------+-------------------------------------------+
+| **Dados**     | Morbilidade e Mortalidade Hospitalar, SNS |
++---------------+-------------------------------------------+
+
+------------------------------------------------------------------------
+
+# Morbilidade e Mortalidade Hospitalar
+
+```{r}
+#| label: num_obitos
+#| results: hide
+#| message: false
+#| warning: false
+
+# Calcular o número de óbitos e extrair o valor diretamente
+num_obitos <- base_gdh_ic_mortalidade2 %>%
+  filter(mortalidade == "1") %>%  # Filtra apenas os registros de "Falecido"
+  summarise(total_obitos = n()) %>%      # Conta o número de linhas filtradas
+  pull(total_obitos)                     # Extrai o valor da coluna total_obitos
+
+# Exibir o resultado
+num_obitos
+
+num_int <- nrow(base_gdh_ic_mortalidade2)
+
+num_int
+
+
+```
+
+
+
+## Row {height="20%"}
+
+```{r}
+#| content: valuebox
+#| title: "Internamentos por Insuficiência Cardíaca"
+#| message: false
+#| warning: false
+#| fill: false
+list(
+  icon = "heart-pulse",
+  color = "primary",
+  value = num_int
+)
+
+```
+
+```{r}
+#| content: valuebox
+#| title: "Óbitos por Insuficiência Cardíaca"
+#| message: false
+#| warning: false
+#| fill: false
+list(
+  icon = "person-circle",
+  color = "#fc8d62",
+  value = num_obitos 
+)
+```
+
+## Row {height="80%"}
+
+### Column {width="50%"}
+
+#### Row {.tabset height="70%"}
+
+```{r}
+#| title: Óbitos (Norte)
+#| message: false
+#| warning: false
+#| fig-width: 10   
+#| fig-height: 8
+#| fill: false   
+
+base_norte <- base_gdh_ic_mortalidade2 %>%
+  filter(nuts2_2024 == "Norte", !is.na(mortalidade), !is.na(sexo)) %>%
+  mutate(mortalidade = recode(mortalidade, `0` = "Não falecido", `1` = "Falecido"))
+
+g3_norte <- ggplot(
+  base_norte,
+  aes(
+    x = sexo,                
+    fill = mortalidade       
+  )) +
+  geom_bar(position = "stack", alpha = 0.7) + 
+  scale_fill_manual(values = c("Falecido" = "#fc8d62", "Não falecido" = "#8da0cb")) + 
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  geom_text(
+    stat = "count",          
+    aes(label = ..count..),  #
+    position = position_stack(vjust = 0.5),  
+    size = 8,               
+    color = "black"
+  ) +
+  labs(
+    y = "Número de Pacientes",
+    fill = "Mortalidade"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.x = element_text(size = 30),
+    axis.text.y = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.text = element_text(size = 25, colour = "grey"),
+    legend.position = "bottom",
+    legend.title = element_blank()
+  )
+
+# Exibir o gráfico
+g3_norte
+
+```
+
+```{r}
+#| title: Óbitos (Alentejo)
+#| message: false
+#| warning: false
+#| fig-width: 10   
+#| fig-height: 8 
+#| fill: false  
+
+base_alentejo <- base_gdh_ic_mortalidade2 %>%
+  filter(nuts2_2024 == "Alentejo", !is.na(mortalidade), !is.na(sexo)) %>%
+  mutate(mortalidade = recode(mortalidade, `0` = "Não falecido", `1` = "Falecido"))
+
+g3_alentejo <- ggplot(
+  base_alentejo,  # Dados filtrados para a região Norte
+  aes(
+    x = sexo,               # Eixo X
+    fill = mortalidade      # Preenchimento com base na variável mortalidade
+  )) +
+  geom_bar(position = "stack", alpha = 0.7) + 
+  scale_fill_manual(values = c("Falecido" = "#fc8d62", "Não falecido" = "#8da0cb")) + 
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  geom_text(
+    stat = "count",          
+    aes(label = ..count..),  #
+    position = position_stack(vjust = 0.5),  
+    size = 8,               
+    color = "black"
+  ) +
+  labs(
+    y = "Número de Pacientes",
+    fill = "Mortalidade"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.x = element_text(size = 30),
+    axis.text.y = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.text = element_text(size = 25, colour = "grey"),
+    legend.position = "bottom",
+    legend.title = element_blank()
+  )
+
+
+# Exibir o gráfico
+g3_alentejo
+
+```
+
+```{r}
+#| title: Óbitos (Algarve)
+#| message: false
+#| warning: false
+#| fig-width: 10   
+#| fig-height: 8
+#| fill: false   
+
+base_algarve <- base_gdh_ic_mortalidade2 %>%
+  filter(nuts2_2024 == "Algarve", !is.na(mortalidade), !is.na(sexo)) %>%
+  mutate(mortalidade = recode(mortalidade, `0` = "Não falecido", `1` = "Falecido"))
+
+g3_algarve <- ggplot(
+  base_algarve,  # Dados filtrados para a região Norte
+  aes(
+    x = sexo,               # Eixo X
+    fill = mortalidade      # Preenchimento com base na variável mortalidade
+  )) +
+  geom_bar(position = "stack", alpha = 0.7) + 
+  scale_fill_manual(values = c("Falecido" = "#fc8d62", "Não falecido" = "#8da0cb")) + 
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  geom_text(
+    stat = "count",          
+    aes(label = ..count..),  #
+    position = position_stack(vjust = 0.5),  
+    size = 8,               
+    color = "black"
+  ) +
+  labs(
+    y = "Número de Pacientes",
+    fill = "Mortalidade"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.x = element_text(size = 30),
+    axis.text.y = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.text = element_text(size = 25, colour = "grey"),
+    legend.position = "bottom",
+    legend.title = element_blank()
+  )
+
+
+# Exibir o gráfico
+g3_algarve
+```
+
+```{r}
+#| title: Óbitos (Península de Setúbal)
+#| message: false
+#| warning: false
+#| fig-width: 10   
+#| fig-height: 8
+#| fill: false   
+
+base_setúbal <- base_gdh_ic_mortalidade2 %>%
+  filter(nuts2_2024 == "Península de Setúbal", !is.na(mortalidade), !is.na(sexo)) %>%
+  mutate(mortalidade = recode(mortalidade, `0` = "Não falecido", `1` = "Falecido"))
+
+g3_setúbal<- ggplot(
+  base_setúbal,  # Dados filtrados para a região Norte
+  aes(
+    x = sexo,               # Eixo X
+    fill = mortalidade      # Preenchimento com base na variável mortalidade
+  )) +
+  geom_bar(position = "stack", alpha = 0.7) + 
+  scale_fill_manual(values = c("Falecido" = "#fc8d62", "Não falecido" = "#8da0cb")) + 
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  geom_text(
+    stat = "count",          
+    aes(label = ..count..),  #
+    position = position_stack(vjust = 0.5),  
+    size = 8,               
+    color = "black"
+  ) +
+  labs(
+    y = "Número de Pacientes",
+    fill = "Mortalidade"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.x = element_text(size = 30),
+    axis.text.y = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.text = element_text(size = 25, colour = "grey"),
+    legend.position = "bottom",
+    legend.title = element_blank()
+  )
+
+
+# Exibir o gráfico
+g3_setúbal
+```
+
+```{r}
+#| title: Óbitos (Centro)
+#| message: false
+#| warning: false
+#| fig-width: 10   
+#| fig-height: 8
+#| fill: false   
+
+base_centro <- base_gdh_ic_mortalidade2 %>%
+  filter(nuts2_2024 == "Centro", !is.na(mortalidade), !is.na(sexo)) %>%
+  mutate(mortalidade = recode(mortalidade, `0` = "Não falecido", `1` = "Falecido"))
+
+g3_centro <- ggplot(
+  base_centro,  # Dados filtrados para a região Norte
+  aes(
+    x = sexo,               # Eixo X
+    fill = mortalidade      # Preenchimento com base na variável mortalidade
+  )) +
+ geom_bar(position = "stack", alpha = 0.7) + 
+  scale_fill_manual(values = c("Falecido" = "#fc8d62", "Não falecido" = "#8da0cb")) + 
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  geom_text(
+    stat = "count",          
+    aes(label = ..count..),  #
+    position = position_stack(vjust = 0.5),  
+    size = 8,               
+    color = "black"
+  ) +
+  labs(
+    y = "Número de Pacientes",
+    fill = "Mortalidade"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.x = element_text(size = 30),
+    axis.text.y = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.text = element_text(size = 25, colour = "grey"),
+    legend.position = "bottom",
+    legend.title = element_blank()
+  )
+
+# Exibir o gráfico
+g3_centro
+```
+
+```{r}
+#| title: Óbitos (Grande Lisboa)
+#| message: false
+#| warning: false
+#| fig-width: 10   
+#| fig-height: 8   
+#| fill: false
+
+
+base_lisboa <- base_gdh_ic_mortalidade2 %>%
+  filter(nuts2_2024 == "Grande Lisboa", !is.na(mortalidade), !is.na(sexo)) %>%
+  mutate(mortalidade = recode(mortalidade, `0` = "Não falecido", `1` = "Falecido"))
+
+g3_lisboa <- ggplot(
+  base_lisboa,  # Dados filtrados para a região Norte
+  aes(
+    x = sexo,               # Eixo X
+    fill = mortalidade      # Preenchimento com base na variável mortalidade
+  )) +
+  geom_bar(position = "stack", alpha = 0.7) + 
+  scale_fill_manual(values = c("Falecido" = "#fc8d62", "Não falecido" = "#8da0cb")) + 
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  geom_text(
+    stat = "count",          
+    aes(label = ..count..),  #
+    position = position_stack(vjust = 0.5),  
+    size = 8,               
+    color = "black"
+  ) +
+  labs(
+    y = "Número de Pacientes",
+    fill = "Mortalidade"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.x = element_text(size = 30),
+    axis.text.y = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.text = element_text(size = 25, colour = "grey"),
+    legend.position = "bottom",
+    legend.title = element_blank()
+  )
+
+
+# Exibir o gráfico
+g3_lisboa
+```
+
+```{r}
+#| title: Óbitos (RA Açores)
+#| message: false
+#| warning: false
+#| fig-width: 10   
+#| fig-height: 8 
+#| fill: false  
+
+base_acores <- base_gdh_ic_mortalidade2 %>%
+  filter(nuts2_2024 == "Região Autónoma dos Açores", !is.na(mortalidade), !is.na(sexo)) %>%
+  mutate(mortalidade = recode(mortalidade, `0` = "Não falecido", `1` = "Falecido"))
+
+g3_acores <- ggplot(
+  base_acores,  # Dados filtrados para a região Norte
+  aes(
+    x = sexo,               # Eixo X
+    fill = mortalidade      # Preenchimento com base na variável mortalidade
+  )) +
+  geom_bar(position = "stack", alpha = 0.7) + 
+  scale_fill_manual(values = c("Falecido" = "#fc8d62", "Não falecido" = "#8da0cb")) + 
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  geom_text(
+    stat = "count",          
+    aes(label = ..count..),  #
+    position = position_stack(vjust = 0.5),  
+    size = 8,               
+    color = "black"
+  ) +
+  labs(
+    y = "Número de Pacientes",
+    fill = "Mortalidade"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.x = element_text(size = 30),
+    axis.text.y = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.text = element_text(size = 25, colour = "grey"),
+    legend.position = "bottom",
+    legend.title = element_blank()
+  )
+
+# Exibir o gráfico
+g3_acores
+```
+
+```{r}
+#| title: Óbitos (RA Madeira)
+#| message: false
+#| warning: false
+#| fig-width: 10   
+#| fig-height: 8
+#| fill: false   
+
+base_madeira <- base_gdh_ic_mortalidade2 %>%
+  filter(nuts2_2024 == "Região Autónoma da Madeira", !is.na(mortalidade), !is.na(sexo)) %>%
+  mutate(mortalidade = recode(mortalidade, `0` = "Não falecido", `1` = "Falecido"))
+
+g3_madeira <- ggplot(
+  base_madeira,  # Dados filtrados para a região Norte
+  aes(
+    x = sexo,               # Eixo X
+    fill = mortalidade      # Preenchimento com base na variável mortalidade
+  )) +
+  geom_bar(position = "stack", alpha = 0.7) + 
+  scale_fill_manual(values = c("Falecido" = "#fc8d62", "Não falecido" = "#8da0cb")) + 
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  geom_text(
+    stat = "count",          
+    aes(label = ..count..),  #
+    position = position_stack(vjust = 0.5),  
+    size = 8,               
+    color = "black"
+  ) +
+  labs(
+    y = "Número de Pacientes",
+    fill = "Mortalidade"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.x = element_text(size = 30),
+    axis.text.y = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.text = element_text(size = 25, colour = "grey"),
+    legend.position = "bottom",
+    legend.title = element_blank()
+  )
+
+
+# Exibir o gráfico
+g3_madeira
+```
+
+```{r}
+#| title: Óbitos (Oeste e Vale do Tejo)
+#| message: false
+#| warning: false
+#| fig-width: 10   
+#| fig-height: 8 
+#| fill: false  
+
+base_oeste <- base_gdh_ic_mortalidade2 %>%
+  filter(nuts2_2024 == "Oeste e Vale do Tejo", !is.na(mortalidade), !is.na(sexo)) %>%
+  mutate(mortalidade = recode(mortalidade, `0` = "Não falecido", `1` = "Falecido"))
+
+g3_oeste <- ggplot(
+  base_oeste,  # Dados filtrados para a região Norte
+  aes(
+    x = sexo,               # Eixo X
+    fill = mortalidade      # Preenchimento com base na variável mortalidade
+  )) +
+  geom_bar(position = "stack", alpha = 0.7) + 
+  scale_fill_manual(values = c("Falecido" = "#fc8d62", "Não falecido" = "#8da0cb")) + 
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  geom_text(
+    stat = "count",          
+    aes(label = ..count..),  #
+    position = position_stack(vjust = 0.5),  
+    size = 8,               
+    color = "black"
+  ) +
+  labs(
+    y = "Número de Pacientes",
+    fill = "Mortalidade"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.x = element_text(size = 30),
+    axis.text.y = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.text = element_text(size = 25, colour = "grey"),
+    legend.position = "bottom",
+    legend.title = element_blank()
+  )
+
+
+# Exibir o gráfico
+g3_oeste
+```
+
+#### Row {height="30%"}
+
+```{r}
+#| title: "Mortalidade por Sexo" 
+#| message: false
+#| warning: false
+#| fig.width: 20
+#| fig.height: 10
+
+# Filtrar para considerar apenas os óbitos (Falecido)
+base_obitos <- base_gdh_ic_mortalidade2 %>%
+  filter(!is.na(mortalidade), mortalidade == "1") %>%  
+  mutate(mortalidade = recode(mortalidade, `1` = "Falecido"))
+
+obitos_sexo <- base_obitos %>%
+  group_by(sexo) %>%  # Agrupar apenas por sexo
+  summarise(contagem = n(), .groups = "drop")
+
+
+g4_sexo <- ggplot(
+  obitos_sexo, 
+  aes(
+    x = contagem, 
+    y = sexo, 
+    fill = sexo)) + 
+  geom_bar(
+    stat = "identity", 
+    position = "stack", 
+    alpha = 0.7, 
+    width = 1)  +
+  geom_text(
+    aes(
+      label = contagem), 
+            hjust = 7,  
+            size = 40,  
+            color = "black") + 
+  labs(title = "Óbitos por Sexo") + 
+  scale_fill_manual(values = c("Masculino" = "#1f77b4", "Feminino" = "#fb9a99")) +  
+  theme_minimal() + 
+  theme(
+    plot.title = element_blank(),
+    legend.text = element_blank(),  
+    legend.title = element_blank(),  
+    axis.text = element_text(size = 100),  
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(), 
+    axis.title.x = element_blank(), 
+    axis.title.y = element_blank(),
+    axis.text.x = element_blank()
+  )
+
+# Exibir o gráfico
+g4_sexo
+```
+
+### Column {width="50%"}
+
+```{r}
+#| title: "Mortalidade por Região NUTS2" 
+#| message: false
+#| warning: false
+#| fig.width: 60
+#| fig.height: 40
+
+base_gdh_ic_temp <- import("data/base_gdh_ic_temp.csv")
+
+obitos = base_gdh_ic_temp |> 
+  group_by(des_dcf) |> 
+  summarise(total_obitos = n()) 
+
+comm_pt = st_read("Data/raw/map_json_portugal/concelhos_portugal_light.json", quiet = TRUE)
+
+comm_pt_temp <- comm_pt
+
+comm_pt_temp = merge(comm_pt_temp, obitos, by.x = "NAME_2", by.y = "des_dcf", all.x = TRUE)
+
+breaks = unique(quantile(comm_pt_temp$total_obitos, probs = seq(0, 1, by = 0.2), na.rm = TRUE))
+
+labels = paste0(breaks[-length(breaks)], "-", breaks[-1])
+
+comm_pt_temp$total_obitos_cat = cut(comm_pt_temp$total_obitos, 
+                                    breaks = breaks, 
+                                    labels = labels, 
+                                    include.lowest = TRUE)
+
+
+mapa_obitos = ggplot() + 
+  geom_sf(data = comm_pt_temp, aes(fill = total_obitos_cat), size = 0.5, color = "white") +
+  theme_void() + 
+  labs(
+    x = NULL,
+    y = NULL,
+  ) +
+  scale_fill_brewer(palette = "YlOrRd", name = "intervalo de episódios") +
+  theme(
+    legend.position = "right", 
+    legend.direction = "vertical", 
+    legend.text = element_text(size = 100, colour = "gray50"), 
+    legend.title = element_blank(),
+  )
+
+mapa_obitos 
+
+```
+
